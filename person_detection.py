@@ -1,17 +1,15 @@
 import cv2
-import numpy as np
+import torch
 from deep_sort_realtime.deepsort_tracker import DeepSort
 
-# 初始化YOLO模型
-net = cv2.dnn.readNet("yolov3.weights", "yolov3.cfg")
-layer_names = net.getLayerNames()
-output_layers = [layer_names[i-1] for i in net.getUnconnectedOutLayers().flatten()]
+# 初始化YOLOv5模型
+model = torch.hub.load('ultralytics/yolov5', 'yolov5s', pretrained=True)  # 更改为 yolov5s
 
-tracker = DeepSort(max_age=600)
+tracker = DeepSort(max_age=10)  # 增加 max_age
 cap = cv2.VideoCapture("test_video-class_time.mp4")
 
 # 性能优化参数
-target_fps = 1  # 目标处理帧率
+target_fps = 1  # 目标帧率
 frame_interval = int(cap.get(cv2.CAP_PROP_FPS) / target_fps)  # 计算跳帧间隔
 frame_count = 0
 
@@ -27,40 +25,28 @@ while cap.isOpened():
     if frame_count % frame_interval != 0:  # 跳帧处理
         continue
 
-    # YOLO检测
-    height, width = frame.shape[:2]
-    blob = cv2.dnn.blobFromImage(frame, 0.00392, (416, 416), (0, 0, 0), True, crop=False)
-    net.setInput(blob)
-    outs = net.forward(output_layers)
-
+    # YOLOv5检测
+    results = model(frame) 
+    detections = results.xyxy[0].cpu().numpy()
+    
     boxes = []
     confidences = []
-    for out in outs:
-        for detection in out:
-            scores = detection[5:]
-            class_id = np.argmax(scores)
-            confidence = scores[class_id]
-            if class_id == 0 and confidence > 0.4:  # 降低置信度阈值
-                center_x = int(detection[0] * width)
-                center_y = int(detection[1] * height)
-                w = int(detection[2] * width)
-                h = int(detection[3] * height)
-                x = int(center_x - w / 2)
-                y = int(center_y - h / 2)
-                
-                boxes.append([x, y, w, h])
-                confidences.append(float(confidence))
+    for detection in detections:
+        if detection[4] >= 0 and detection[5] == 0:  # 置信度阈值
+            x1, y1, x2, y2, confidence, class_id = detection
+            boxes.append([x1, y1, x2 - x1, y2 - y1])
+            confidences.append(confidence)
 
     # 使用NMS消除重叠框
-    indices = cv2.dnn.NMSBoxes(boxes, confidences, 0.5, 0.4)  # 调整NMS参数
-    detections = []
+    indices = cv2.dnn.NMSBoxes(boxes, confidences, 0.0, 0.5)  # 调整NMS参数
+    filtered_detections = []
     if len(indices) > 0:
         for i in indices.flatten():
             (x, y, w, h) = boxes[i]
-            detections.append(([x, y, w, h], confidences[i], None))
+            filtered_detections.append(([x, y, w, h], confidences[i], None))
 
     # 更新跟踪器
-    tracks = tracker.update_tracks(detections, frame=frame)
+    tracks = tracker.update_tracks(filtered_detections, frame=frame)
     
     # 绘制结果
     for track in tracks:
