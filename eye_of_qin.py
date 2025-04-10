@@ -16,27 +16,27 @@ face_detector = cv2.FaceDetectorYN.create(
 )
 
 # 打开视频文件
-cap = cv2.VideoCapture('test_video.mp4')
+cap = cv2.VideoCapture("test_video.mp4")
 
 # 获取视频原始尺寸
 original_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
 original_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
 # 设置窗口宽度
-window_width = 1000
+window_width = 1100
 
 # 获取视频帧率
 fps = cap.get(cv2.CAP_PROP_FPS)
-
-# 初始化追踪器
-max_age_second = 10
-max_age = int(max_age_second * fps)
-tracker = DeepSort(max_age=max_age, n_init=2)
 
 # 帧间隔设置
 time_interval = 1  # second
 frame_interval = int(fps * time_interval)
 frame_number = 0
+
+# 初始化追踪器
+max_age_second = 10
+max_age = int(max_age_second / time_interval)
+tracker = DeepSort(max_age=max_age, n_init=2)
 
 while cap.isOpened():
     ret, frame = cap.read()
@@ -44,7 +44,7 @@ while cap.isOpened():
         break
 
     if frame_number % frame_interval == 0:
-        # YOLO目标检测
+        # YOLO人物检测
         results = model.predict(frame, conf=0.15, iou=0.2, classes=[0], imgsz=1024)
         
         # 处理检测结果
@@ -63,7 +63,7 @@ while cap.isOpened():
 
         # 更新追踪器
         tracks = tracker.update_tracks(detections, frame=frame)
-        annotated_frame = results[0].plot(line_width=4)
+        annotated_frame = results[0].plot(line_width=2)  # 绘制检测结果
 
         # 处理每个追踪目标
         for track in tracks:
@@ -89,7 +89,7 @@ while cap.isOpened():
                 if h > 0 and w > 0:  # 防止空图像
                     face_detector.setInputSize((w, h))
                     _, faces = face_detector.detect(roi)
-                    if faces is not None and len(faces) > 0:
+                    if faces is not None and len(faces) > 0:  # face detected
                         state = "Awake"
 
             
@@ -109,11 +109,11 @@ while cap.isOpened():
             cv2.putText(
                 annotated_frame, 
                 f"ID {track_id} {state}",
-                (x1, y1 + 40),
+                (x1, y1),
                 cv2.FONT_HERSHEY_SIMPLEX,
-                1.5,  # font size
+                1.2,  # font size
                 colour,
-                6  # font thickness
+                5,  # font thickness
             )
 
         # 缩放窗口
