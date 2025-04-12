@@ -101,7 +101,7 @@ while cap.isOpened():
             elif state == "Sleeping":
                 colour = (0, 255, 255)  # blue, green, red
             elif state == "Untracked":
-                colour = (0, 170, 170)  # blue, green, red
+                colour = (200, 200, 200)  # blue, green, red
             else:
                 ValueError("Invalid state")
                 
