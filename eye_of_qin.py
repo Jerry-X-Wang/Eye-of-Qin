@@ -2,18 +2,51 @@ import cv2
 from ultralytics import YOLO
 from deep_sort_realtime.deepsort_tracker import DeepSort
 
-# 加载YOLOv8的默认预训练模型
+import cv2
+import os
+from ultralytics import YOLO
+from deep_sort_realtime.deepsort_tracker import DeepSort
+
+# 加载YOLOv8模型
 model = YOLO('yolov8n.pt')
 
-# 初始化面部检测模型
+# 初始化人脸检测器
 face_detector = cv2.FaceDetectorYN.create(
-    "face_detection_yunet_2023mar.onnx",  # 需要自行下载模型文件
+    "face_detection_yunet_2023mar.onnx",
     "",
     (320, 320),
     score_threshold=0.6,
     nms_threshold=0.3,
     top_k=5000
 )
+
+# 初始化人脸识别模型
+face_recognizer = cv2.FaceRecognizerSF.create(
+    "face_recognition_sface_2021dec.onnx",  # 需下载模型文件
+    ""
+)
+
+# 构建人脸特征数据库
+known_faces = []
+faces_dir = "faces"
+for filename in os.listdir(faces_dir):
+    if filename.lower().endswith(('.png', '.jpg', '.jpeg')):
+        name = os.path.splitext(filename)[0]
+        img_path = os.path.join(faces_dir, filename)
+        img = cv2.imread(img_path)
+        if img is None:
+            continue
+        
+        # 人脸检测
+        face_detector.setInputSize((img.shape[1], img.shape[0]))
+        _, faces = face_detector.detect(img)
+        
+        if faces is not None and len(faces) > 0:
+            # 提取第一个人脸特征
+            face = faces[0]
+            aligned_face = face_recognizer.alignCrop(img, face)
+            feature = face_recognizer.feature(aligned_face)
+            known_faces.append({'name': name, 'feature': feature})
 
 # 打开视频文件
 cap = cv2.VideoCapture("test_video.mp4")
@@ -91,7 +124,6 @@ while cap.isOpened():
                     _, faces = face_detector.detect(roi)
                     if faces is not None and len(faces) > 0:  # face detected
                         state = "Awake"
-
             
             if track.time_since_update != 0:
                 state = "Untracked"
@@ -105,15 +137,50 @@ while cap.isOpened():
             else:
                 ValueError("Invalid state")
                 
-            # 绘制追踪信息和姿态
+            # 人脸识别处理
+            person_name = "Unknown"
+            if x2 - x1 > 0 and y2 - y1 > 0:
+                roi = frame[y1:y2, x1:x2]
+                h, w = roi.shape[:2]
+                
+                if h > 0 and w > 0:
+                    face_detector.setInputSize((w, h))
+                    _, faces = face_detector.detect(roi)
+                    
+                    if faces is not None and len(faces) > 0:
+                        face = faces[0]
+                        try:
+                            # 人脸对齐和特征提取
+                            aligned_face = face_recognizer.alignCrop(roi, face)
+                            current_feature = face_recognizer.feature(aligned_face)
+                            
+                            # 特征比对
+                            best_match = None
+                            highest_score = 0
+                            for known in known_faces:
+                                score = face_recognizer.match(
+                                    current_feature, 
+                                    known['feature'],
+                                    cv2.FaceRecognizerSF_FR_COSINE
+                                )
+                                if score > highest_score:
+                                    highest_score = score
+                                    best_match = known['name']
+                            
+                            # 相似度阈值判断
+                            person_name = best_match if highest_score >= 0.4 else "Unknown"
+                        except Exception as e:
+                            pass
+
+            # 修改显示文本
             cv2.putText(
                 annotated_frame, 
-                f"ID {track_id} {state}",
+                f"ID {track_id} {person_name} {state}",
                 (x1, y1),
                 cv2.FONT_HERSHEY_SIMPLEX,
-                1.2,  # font size
+                1.2,
                 colour,
-                5,  # font thickness
+                5,
             )
 
         # 缩放窗口
