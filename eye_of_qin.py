@@ -1,9 +1,4 @@
-import cv2
-from ultralytics import YOLO
-from deep_sort_realtime.deepsort_tracker import DeepSort
-
-import cv2
-import os
+import cv2, json, os
 from ultralytics import YOLO
 from deep_sort_realtime.deepsort_tracker import DeepSort
 
@@ -49,7 +44,13 @@ for filename in os.listdir(faces_dir):
             known_faces.append({'name': name, 'feature': feature})
 
 # 打开视频文件
-cap = cv2.VideoCapture("test_video.mp4")
+video_path = "videos/video_0042_0_10_20250307080100_20250307081139.mp4"
+cap = cv2.VideoCapture(video_path)
+
+# 路径处理代码
+base_name = os.path.splitext(os.path.basename(video_path))[0]
+output_dir = "data/raw"
+os.makedirs(output_dir, exist_ok=True)
 
 # 获取视频原始尺寸
 original_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
@@ -70,6 +71,7 @@ frame_number = 0
 max_age_second = 10
 max_age = int(max_age_second / time_interval)
 tracker = DeepSort(max_age=max_age, n_init=2)
+tracking_data = []
 
 while cap.isOpened():
     ret, frame = cap.read()
@@ -98,6 +100,12 @@ while cap.isOpened():
         tracks = tracker.update_tracks(detections, frame=frame)
         annotated_frame = results[0].plot(line_width=2)  # 绘制检测结果
 
+        frame_entry = {
+            "timestamp": round(frame_number/fps, 1),
+            "frame": frame_number,
+            "tracks": []
+        }
+
         # 处理每个追踪目标
         for track in tracks:
             if not track.is_confirmed():
@@ -114,7 +122,7 @@ while cap.isOpened():
             y2 = min(original_height, y2)
             
             # 姿态检测
-            state = "Sleeping"
+            state = "sleeping"
             if x2 - x1 > 0 and y2 - y1 > 0:  # 有效区域检查
                 roi = frame[y1:y2, x1:x2]
                 h, w = roi.shape[:2]
@@ -123,22 +131,22 @@ while cap.isOpened():
                     face_detector.setInputSize((w, h))
                     _, faces = face_detector.detect(roi)
                     if faces is not None and len(faces) > 0:  # face detected
-                        state = "Awake"
+                        state = "awake"
             
             if track.time_since_update != 0:
-                state = "Untracked"
+                state = "untracked"
                 
-            if state == "Awake":
+            if state == "awake":
                 colour = (0, 255, 0)  # blue, green, red
-            elif state == "Sleeping":
+            elif state == "sleeping":
                 colour = (0, 255, 255)  # blue, green, red
-            elif state == "Untracked":
+            elif state == "untracked":
                 colour = (200, 200, 200)  # blue, green, red
             else:
                 ValueError("Invalid state")
                 
             # 人脸识别处理
-            person_name = "Unknown"
+            identity = "unknown"
             if x2 - x1 > 0 and y2 - y1 > 0:
                 roi = frame[y1:y2, x1:x2]
                 h, w = roi.shape[:2]
@@ -168,20 +176,34 @@ while cap.isOpened():
                                     best_match = known['name']
                             
                             # 相似度阈值判断
-                            person_name = best_match if highest_score >= 0.4 else "Unknown"
+                            identity = best_match if highest_score >= 0.4 else "unknown"
                         except Exception as e:
                             pass
+
+            track_info = {
+                "track_id": track_id,
+                "position": {
+                    "x": (x1 + x2) / 2,
+                    "y": (y1 + y2) / 2
+                },
+                "identity": identity,
+                "state": state,
+            }
+            frame_entry["tracks"].append(track_info)
 
             # 修改显示文本
             cv2.putText(
                 annotated_frame, 
-                f"ID {track_id} {person_name} {state}",
+                f"ID {track_id} {identity} {state}",
                 (x1, y1),
                 cv2.FONT_HERSHEY_SIMPLEX,
                 1.2,
                 colour,
                 5,
             )
+
+        # save data
+        tracking_data.append(frame_entry)
 
         # 缩放窗口
         scale = window_width / annotated_frame.shape[1]
@@ -194,6 +216,11 @@ while cap.isOpened():
             break
 
     frame_number += 1
+
+# save data file
+output_path = os.path.join(output_dir, f"{base_name}.json")
+with open(output_path, 'w') as f:
+    json.dump(tracking_data, f, indent=2, ensure_ascii=False)
 
 cap.release()
 cv2.destroyAllWindows()
