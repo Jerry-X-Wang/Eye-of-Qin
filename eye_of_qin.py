@@ -1,8 +1,11 @@
-import cv2, json, os
+import cv2, json
 from ultralytics import YOLO
 from deep_sort_realtime.deepsort_tracker import DeepSort
+from pathlib import Path
 
-# 加载YOLOv8模型
+# 是否显示监控画面
+monitor_on = True
+
 model = YOLO('yolov8n.pt')
 
 # 初始化人脸检测器
@@ -23,11 +26,10 @@ face_recognizer = cv2.FaceRecognizerSF.create(
 
 # 构建人脸特征数据库
 known_faces = []
-faces_dir = "faces"
-for filename in os.listdir(faces_dir):
-    if filename.lower().endswith(('.png', '.jpg', '.jpeg')):
-        name = os.path.splitext(filename)[0]
-        img_path = os.path.join(faces_dir, filename)
+faces_dir = Path("faces")
+for img_path in faces_dir.iterdir():
+    if img_path.suffix.lower() in ('.png', '.jpg', '.jpeg'):
+        name = img_path.stem
         img = cv2.imread(img_path)
         if img is None:
             continue
@@ -42,15 +44,13 @@ for filename in os.listdir(faces_dir):
             aligned_face = face_recognizer.alignCrop(img, face)
             feature = face_recognizer.feature(aligned_face)
             known_faces.append({'name': name, 'feature': feature})
+            print(f"Face registered: {name}")
 
 # 打开视频文件
-video_path = "videos/video_0042_0_10_20250307080100_20250307081139.mp4"
-cap = cv2.VideoCapture(video_path)
-
-# 路径处理代码
-base_name = os.path.splitext(os.path.basename(video_path))[0]
-output_dir = "data/raw"
-os.makedirs(output_dir, exist_ok=True)
+video_dir = Path("videos")
+video_name = Path("test_video.mp4")
+input_path = video_dir / video_name
+cap = cv2.VideoCapture(input_path)
 
 # 获取视频原始尺寸
 original_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
@@ -101,7 +101,7 @@ while cap.isOpened():
         annotated_frame = results[0].plot(line_width=2)  # 绘制检测结果
 
         frame_entry = {
-            "timestamp": round(frame_number/fps, 1),
+            "timestamp": frame_number / fps,
             "frame": frame_number,
             "tracks": []
         }
@@ -135,18 +135,9 @@ while cap.isOpened():
             
             if track.time_since_update != 0:
                 state = "untracked"
-                
-            if state == "awake":
-                colour = (0, 255, 0)  # blue, green, red
-            elif state == "sleeping":
-                colour = (0, 255, 255)  # blue, green, red
-            elif state == "untracked":
-                colour = (200, 200, 200)  # blue, green, red
-            else:
-                ValueError("Invalid state")
-                
+
             # 人脸识别处理
-            identity = "unknown"
+            face_id = "unknown"
             if x2 - x1 > 0 and y2 - y1 > 0:
                 roi = frame[y1:y2, x1:x2]
                 h, w = roi.shape[:2]
@@ -176,7 +167,7 @@ while cap.isOpened():
                                     best_match = known['name']
                             
                             # 相似度阈值判断
-                            identity = best_match if highest_score >= 0.4 else "unknown"
+                            face_id = best_match if highest_score >= 0.4 else "unknown"
                         except Exception as e:
                             pass
 
@@ -186,39 +177,54 @@ while cap.isOpened():
                     "x": (x1 + x2) / 2,
                     "y": (y1 + y2) / 2
                 },
-                "identity": identity,
+                "face_id": face_id,
                 "state": state,
             }
             frame_entry["tracks"].append(track_info)
 
-            # 修改显示文本
-            cv2.putText(
-                annotated_frame, 
-                f"ID {track_id} {identity} {state}",
-                (x1, y1),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                1.2,
-                colour,
-                5,
-            )
+            if monitor_on:
+                # set colour
+                if state == "awake":
+                    colour = (0, 255, 0)  # blue, green, red
+                elif state == "sleeping":
+                    colour = (0, 255, 255)  # blue, green, red
+                elif state == "untracked":
+                    colour = (200, 200, 200)  # blue, green, red
+                else:
+                    ValueError("Invalid state")
+
+                # 显示文本
+                cv2.putText(
+                    annotated_frame, 
+                    f"ID {track_id} {face_id} {state}",
+                    (x1, y1),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    1.2,
+                    colour,
+                    5,
+                )
 
         # save data
         tracking_data.append(frame_entry)
 
-        # 缩放窗口
-        scale = window_width / annotated_frame.shape[1]
-        width = int(annotated_frame.shape[1] * scale)
-        height = int(annotated_frame.shape[0] * scale)
-        resized_frame = cv2.resize(annotated_frame, (width, height), interpolation=cv2.INTER_AREA)
-        
-        cv2.imshow('Frame', resized_frame)
-        if cv2.waitKey(1) & 0xFF == 27:  # press ESC to exit
-            break
+        if monitor_on:
+            # 缩放窗口
+            scale = window_width / annotated_frame.shape[1]
+            width = int(annotated_frame.shape[1] * scale)
+            height = int(annotated_frame.shape[0] * scale)
+            resized_frame = cv2.resize(annotated_frame, (width, height), interpolation=cv2.INTER_AREA)
+            # show monitor window
+            cv2.imshow('Frame', resized_frame)
+            if cv2.waitKey(1) & 0xFF == 27:  # press ESC to exit
+                break
 
     frame_number += 1
 
 # save data file
-output_path = os.path.join(output_dir, f"{base_name}.json")
+output_dir = Path("data/raw")
+output_dir.mkdir(parents=True, exist_ok=True)
+output_path = output_dir / f"{video_name}.json"
+
 with open(output_path, 'w') as f:
     json.dump(tracking_data, f, indent=2, ensure_ascii=False)
 
