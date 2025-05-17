@@ -48,7 +48,7 @@ for img_path in faces_dir.iterdir():
 
 # 打开视频文件
 video_dir = Path("videos")
-video_name = Path("test_video.mp4")
+video_name = Path("test_video_2.mp4")
 input_path = video_dir / video_name
 cap = cv2.VideoCapture(input_path)
 
@@ -59,8 +59,9 @@ original_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 # 设置窗口宽度
 window_width = 1100
 
-# 获取视频帧率
+# 获取视频数据
 fps = cap.get(cv2.CAP_PROP_FPS)
+total_frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
 # 帧间隔设置
 time_interval = 1  # second
@@ -79,17 +80,18 @@ while cap.isOpened():
         break
 
     if frame_number % frame_interval == 0:
+        print(f"Frame {frame_number} / {total_frame_count}", f"{frame_number/total_frame_count*100:.2f}%")
         # YOLO人物检测
         results = model.predict(frame, conf=0.15, iou=0.2, classes=[0], imgsz=1024)
         
         # 处理检测结果
-        boxes = results[0].boxes.xyxy.cpu().numpy()
+        bboxes = results[0].boxes.xyxy.cpu().numpy()
         confidences = results[0].boxes.conf.cpu().numpy()
         class_ids = results[0].boxes.cls.cpu().numpy().astype(int)
         
         detections = []
-        for i in range(len(boxes)):
-            x1, y1, x2, y2 = boxes[i]
+        for i in range(len(bboxes)):
+            x1, y1, x2, y2 = bboxes[i]
             conf = confidences[i]
             class_id = class_ids[i]
             if class_id == 0:
@@ -173,10 +175,7 @@ while cap.isOpened():
 
             track_info = {
                 "track_id": track_id,
-                "position": {
-                    "x": (x1 + x2) / 2,
-                    "y": (y1 + y2) / 2
-                },
+                "bbox": [x1, y1, x2, y2],
                 "face_id": face_id,
                 "state": state,
             }
@@ -220,6 +219,8 @@ while cap.isOpened():
 
     frame_number += 1
 
+print("Done")
+
 # save data file
 output_dir = Path("data/raw")
 output_dir.mkdir(parents=True, exist_ok=True)
@@ -227,6 +228,8 @@ output_path = output_dir / f"{video_name}.json"
 
 with open(output_path, 'w') as f:
     json.dump(tracking_data, f, indent=2, ensure_ascii=False)
+
+print(f"Data saved to {output_path}")
 
 cap.release()
 cv2.destroyAllWindows()
