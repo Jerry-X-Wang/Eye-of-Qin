@@ -1,4 +1,4 @@
-import cv2, json
+import cv2, json, ctypes
 from ultralytics import YOLO
 from deep_sort_realtime.deepsort_tracker import DeepSort
 from pathlib import Path
@@ -6,7 +6,7 @@ from pathlib import Path
 # 是否显示监控画面
 monitor_on = True
 
-model = YOLO('yolov8n.pt')
+model = YOLO("yolov8n.pt")
 
 # 初始化人脸检测器
 face_detector = cv2.FaceDetectorYN.create(
@@ -28,7 +28,7 @@ face_recognizer = cv2.FaceRecognizerSF.create(
 known_faces = []
 faces_dir = Path("faces")
 for img_path in faces_dir.iterdir():
-    if img_path.suffix.lower() in ('.png', '.jpg', '.jpeg'):
+    if img_path.suffix.lower() in (".png", ".jpg", ".jpeg"):
         name = img_path.stem
         img = cv2.imread(img_path)
         if img is None:
@@ -43,7 +43,7 @@ for img_path in faces_dir.iterdir():
             face = faces[0]
             aligned_face = face_recognizer.alignCrop(img, face)
             feature = face_recognizer.feature(aligned_face)
-            known_faces.append({'name': name, 'feature': feature})
+            known_faces.append({"name": name, "feature": feature})
             print(f"Face registered: {name}")
 
 # 打开视频文件
@@ -57,7 +57,11 @@ original_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
 original_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
 # 设置窗口宽度
-window_width = 1100
+if original_width >= original_height:
+    window_width = int(0.9 * ctypes.windll.user32.GetSystemMetrics(0))
+else:
+    window_height = int(0.9 * ctypes.windll.user32.GetSystemMetrics(1))
+    window_width = int(original_width * window_height / original_height)
 
 # 获取视频数据
 fps = cap.get(cv2.CAP_PROP_FPS)
@@ -80,7 +84,8 @@ while cap.isOpened():
         break
 
     if frame_number % frame_interval == 0:
-        print(f"Frame {frame_number} / {total_frame_count}", f"{frame_number/total_frame_count*100:.2f}%")
+        print("\n", f"Frame {frame_number}/{total_frame_count}", f"{frame_number/total_frame_count*100:.2f}%")
+        
         # YOLO人物检测
         results = model.predict(frame, conf=0.15, iou=0.2, classes=[0], imgsz=1024)
         
@@ -161,12 +166,12 @@ while cap.isOpened():
                             for known in known_faces:
                                 score = face_recognizer.match(
                                     current_feature, 
-                                    known['feature'],
+                                    known["feature"],
                                     cv2.FaceRecognizerSF_FR_COSINE
                                 )
                                 if score > highest_score:
                                     highest_score = score
-                                    best_match = known['name']
+                                    best_match = known["name"]
                             
                             # 相似度阈值判断
                             face_id = best_match if highest_score >= 0.4 else "unknown"
@@ -213,7 +218,7 @@ while cap.isOpened():
             height = int(annotated_frame.shape[0] * scale)
             resized_frame = cv2.resize(annotated_frame, (width, height), interpolation=cv2.INTER_AREA)
             # show monitor window
-            cv2.imshow('Frame', resized_frame)
+            cv2.imshow("Frame", resized_frame)
             if cv2.waitKey(1) & 0xFF == 27:  # press ESC to exit
                 break
 
@@ -226,7 +231,7 @@ output_dir = Path("data/raw")
 output_dir.mkdir(parents=True, exist_ok=True)
 output_path = output_dir / f"{video_name}.json"
 
-with open(output_path, 'w') as f:
+with open(output_path, "w") as f:
     json.dump(tracking_data, f, indent=2, ensure_ascii=False)
 
 print(f"Data saved to {output_path}")
