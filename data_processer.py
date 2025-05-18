@@ -26,6 +26,16 @@ def calculate_iou(bbox1, bbox2):
         return 0
     return inter_area / union_area
 
+
+def are_same_face_id(face_id1, face_id2):
+    # 去掉后缀_glasses进行比较
+    if face_id1 == face_id2:
+        return True
+    if face_id1.replace('_glasses', '') == face_id2.replace('_glasses', ''):
+        return True
+    return False
+
+
 def process_data(input_path):
     # 读取原始数据
     with open(input_path, 'r', encoding='utf-8') as f:
@@ -50,42 +60,52 @@ def process_data(input_path):
                 for j in range(i - 1, -1, -1):
                     prev_entry = data[j]
                     prev_tracks = prev_entry["tracks"]
-                    found_match = False
+                    max_iou = 0
+                    max_iou_track = None
+                    face_exist = False
                     for prev_track in prev_tracks:
-                        if prev_track["track_id"] == track_id:
-                            if calculate_iou(bbox, prev_track["bbox"]) >= IOU_THRESHOLD:
-                                if prev_track["face_id"] == "unknown":
-                                    prev_track["face_id"] = face_id
-                                else:
-                                    found_match = True
+                        if prev_track["face_id"] == face_id:
+                            face_exist = True
                             break
-                    if found_match:
+                        iou = calculate_iou(bbox, prev_track["bbox"])
+                        if iou >= IOU_THRESHOLD and iou > max_iou:
+                            max_iou = iou
+                            max_iou_track = prev_track
+                    if face_exist:
                         break
+                    if max_iou_track and max_iou_track["face_id"] == "unknown":
+                        max_iou_track["face_id"] = face_id
+                        # 此处不需跳出循环，因为循环的索引是向后的而这里的替换是向前的
                 
                 # 往后覆盖face_id
                 for j in range(i + 1, len(data)):
                     next_entry = data[j]
                     next_tracks = next_entry["tracks"]
-                    found_match = False
+                    max_iou = 0
+                    max_iou_track = None
+                    face_exist = False
                     for next_track in next_tracks:
-                        if next_track["track_id"] == track_id:
-                            if calculate_iou(bbox, next_track["bbox"]) >= IOU_THRESHOLD:
-                                if next_track["face_id"] == "unknown":
-                                    next_track["face_id"] = face_id
-                                else:
-                                    found_match = True
+                        if next_track["face_id"] == face_id:
+                            face_exist = True
                             break
-                    if found_match:
+                        iou = calculate_iou(bbox, next_track["bbox"])
+                        if iou >= IOU_THRESHOLD and iou > max_iou:
+                            max_iou = iou
+                            max_iou_track = next_track
+                    if face_exist:
                         break
+                    if max_iou_track and max_iou_track["face_id"] == "unknown":
+                        max_iou_track["face_id"] = face_id
+                        break  # 跳出循环，避免重复覆盖
 
     return data
 
-input_dir = Path("data/raw")
+input_dir = Path("d:/programs/eye_of_qin/data/raw")
 data_name = Path("test_video_2.mp4.json")
 processed_data = process_data(input_dir / data_name)
 
 # 保存结果
-output_dir = Path("data/processed")
+output_dir = Path("d:/programs/eye_of_qin/data/processed")
 output_dir.mkdir(parents=True, exist_ok=True)  # 确保输出目录存在
 output_path = output_dir / f"{data_name}"
 
