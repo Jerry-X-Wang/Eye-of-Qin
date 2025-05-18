@@ -57,11 +57,12 @@ original_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
 original_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
 # 设置窗口宽度
-if original_width >= original_height:
-    window_width = int(0.9 * ctypes.windll.user32.GetSystemMetrics(0))
-else:
-    window_height = int(0.9 * ctypes.windll.user32.GetSystemMetrics(1))
-    window_width = int(original_width * window_height / original_height)
+if monitor_on:
+    if original_width >= original_height:
+        window_width = int(0.9 * ctypes.windll.user32.GetSystemMetrics(0))
+    else:
+        window_height = int(0.9 * ctypes.windll.user32.GetSystemMetrics(1))
+        window_width = int(original_width * window_height / original_height)
 
 # 获取视频数据
 fps = cap.get(cv2.CAP_PROP_FPS)
@@ -84,7 +85,7 @@ while cap.isOpened():
         break
 
     if frame_number % frame_interval == 0:
-        print("\n", f"Frame {frame_number}/{total_frame_count}", f"{frame_number/total_frame_count*100:.2f}%")
+        print(f"\nFrame {frame_number}/{total_frame_count}", f"{frame_number/total_frame_count*100:.2f}%")
         
         # YOLO人物检测
         results = model.predict(frame, conf=0.15, iou=0.2, classes=[0], imgsz=1024)
@@ -181,7 +182,7 @@ while cap.isOpened():
             track_info = {
                 "track_id": track_id,
                 "bbox": [x1, y1, x2, y2],
-                "face_id": face_id,
+                "face_id": face_id.split("_")[0],  # remove suffix "_glasses"
                 "state": state,
             }
             frame_entry["tracks"].append(track_info)
@@ -224,7 +225,7 @@ while cap.isOpened():
 
     frame_number += 1
 
-print("Done")
+print("\nDone")
 
 # save data file
 output_dir = Path("data/raw")
