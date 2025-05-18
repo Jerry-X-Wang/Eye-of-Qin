@@ -90,12 +90,12 @@ def process_data(input_path):
 
     return data
 
-input_dir = Path("d:/programs/eye_of_qin/data/raw")
+input_dir = Path("data/raw")
 data_name = Path("test_video_2.mp4.json")
 input_path = input_dir / data_name
 processed_data = process_data(input_path)
 
-output_dir = Path("d:/programs/eye_of_qin/data/processed")
+output_dir = Path("data/processed")
 output_dir.mkdir(parents=True, exist_ok=True)
 output_path = output_dir / data_name
 
