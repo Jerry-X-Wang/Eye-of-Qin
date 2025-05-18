@@ -26,16 +26,6 @@ def calculate_iou(bbox1, bbox2):
         return 0
     return inter_area / union_area
 
-
-def are_same_face_id(face_id1, face_id2):
-    # 去掉后缀_glasses进行比较
-    if face_id1 == face_id2:
-        return True
-    if face_id1.replace('_glasses', '') == face_id2.replace('_glasses', ''):
-        return True
-    return False
-
-
 def process_data(input_path):
     # 读取原始数据
     with open(input_path, 'r', encoding='utf-8') as f:
@@ -102,12 +92,12 @@ def process_data(input_path):
 
 input_dir = Path("d:/programs/eye_of_qin/data/raw")
 data_name = Path("test_video_2.mp4.json")
-processed_data = process_data(input_dir / data_name)
+input_path = input_dir / data_name
+processed_data = process_data(input_path)
 
-# 保存结果
 output_dir = Path("d:/programs/eye_of_qin/data/processed")
-output_dir.mkdir(parents=True, exist_ok=True)  # 确保输出目录存在
-output_path = output_dir / f"{data_name}"
+output_dir.mkdir(parents=True, exist_ok=True)
+output_path = output_dir / data_name
 
 print(f"Processed data saved to {output_path}")
 
