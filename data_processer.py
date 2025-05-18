@@ -28,7 +28,7 @@ def calculate_iou(bbox1, bbox2):
 
 def process_data(input_path):
     # 读取原始数据
-    with open(input_path, 'r', encoding='utf-8') as f:
+    with open(input_path, 'r') as f:
         data = json.load(f)
 
     # 定义一个IoU阈值来判断位置是否相近
