@@ -1,130 +1,95 @@
 import json
-from collections import defaultdict
-import numpy as np
-from sklearn.cluster import DBSCAN
 from pathlib import Path
+
+def calculate_iou(bbox1, bbox2):
+    x1, y1, x2, y2 = bbox1
+    x3, y3, x4, y4 = bbox2
+    
+    # 计算交集的边界
+    inter_x1 = max(x1, x3)
+    inter_y1 = max(y1, y3)
+    inter_x2 = min(x2, x4)
+    inter_y2 = min(y2, y4)
+    
+    # 计算交集面积
+    inter_area = max(0, inter_x2 - inter_x1) * max(0, inter_y2 - inter_y1)
+    
+    # 计算bbox1和bbox2的面积
+    area1 = (x2 - x1) * (y2 - y1)
+    area2 = (x4 - x3) * (y4 - y3)
+    
+    # 计算并集面积
+    union_area = area1 + area2 - inter_area
+    
+    # 计算IoU
+    if union_area == 0:
+        return 0
+    return inter_area / union_area
 
 def process_data(input_path):
     # 读取原始数据
-    with open(input_path) as f:
+    with open(input_path, 'r', encoding='utf-8') as f:
         data = json.load(f)
-    
-    # 转换为更方便处理的结构
-    all_points = []
-    for frame in data:
-        for track in frame["tracks"]:
-            all_points.append({
-                "timestamp": frame["timestamp"],
-                "track_id": track["track_id"],
-                "position": track["position"],
-                "original_state": track["state"],
-                "identity": track["identity"]
-            })
-    
-    # 需求1：合并位置相近的ID
-    # 使用DBSCAN聚类算法
-    positions = np.array([[p["position"]["x"], p["position"]["y"]] for p in all_points])
-    clustering = DBSCAN(eps=50, min_samples=2).fit(positions)  # 50像素为邻域半径
-    
-    # 创建ID映射表
-    id_map = {}
-    new_id = 1
-    for label, point in zip(clustering.labels_, all_points):
-        if label == -1:  # 噪声点保持原ID
-            id_map[point["track_id"]] = f"ID-{new_id}"
-            new_id +=1
-        else:
-            if label not in id_map:
-                id_map[label] = f"CLS-{new_id}"
-                new_id +=1
-            point["processed_id"] = id_map[label]
-    
-    # 更新所有点的ID
-    for p in all_points:
-        p["processed_id"] = id_map.get(p["track_id"], p["track_id"])
-    
-    # 需求2：身份传播
-    identity_records = defaultdict(lambda: {"last_identity": "unknown", "history": []})
-    
-    # 按时间排序
-    sorted_points = sorted(all_points, key=lambda x: x["timestamp"])
-    
-    for p in sorted_points:
-        record = identity_records[p["processed_id"]]
-        if p["identity"] != "unknown":
-            record["last_identity"] = p["identity"]
-            record["history"].append(p["identity"])
-        else:
-            # 使用最近的非unknown身份
-            if len(record["history"]) > 0:
-                p["processed_identity"] = record["last_identity"]
-            else:
-                p["processed_identity"] = "unknown"
-        
-        # 保留最近5个识别结果
-        if len(record["history"]) > 5:
-            record["history"].pop(0)
-    
-    # 需求3：状态覆盖
-    time_window = 60  # 60秒窗口
-    state_records = defaultdict(list)
-    
-    for p in sorted_points:
-        # 获取时间窗口内的记录
-        window_start = p["timestamp"] - time_window
-        window_records = [
-            r for r in state_records[p["processed_id"]]
-            if r["timestamp"] >= window_start
-        ]
-        
-        # 统计状态比例
-        total = len(window_records)
-        sleeping_count = len([r for r in window_records 
-                            if r["original_state"] in ("sleeping", "untracked")])
-        
-        # 添加当前记录到历史
-        state_records[p["processed_id"]].append({
-            "timestamp": p["timestamp"],
-            "original_state": p["original_state"]
-        })
-        
-        # 应用覆盖规则
-        if total > 0 and (sleeping_count / total) >= 0.8:
-            p["processed_state"] = "sleeping"
-        else:
-            p["processed_state"] = p["original_state"]
-    
-    # 重组数据结构
-    processed_data = []
-    current_frame = None
-    
-    for p in sorted_points:
-        if not current_frame or current_frame["timestamp"] != p["timestamp"]:
-            current_frame = {
-                "timestamp": p["timestamp"],
-                "processed_tracks": []
-            }
-            processed_data.append(current_frame)
-        
-        current_frame["processed_tracks"].append({
-            "original_id": p["track_id"],
-            "processed_id": p["processed_id"],
-            "position": p["position"],
-            "original_state": p["original_state"],
-            "processed_state": p["processed_state"],
-            "processed_identity": p.get("processed_identity", "unknown")
-        })
-    
-    return processed_data
 
-# 使用
+    # 定义一个IoU阈值来判断位置是否相近
+    IOU_THRESHOLD = 0.5
+
+    # 遍历每个时间刻的每个track
+    for i, entry in enumerate(data):
+        timestamp = entry["timestamp"]
+        frame = entry["frame"]
+        tracks = entry["tracks"]
+        
+        for track in tracks:
+            if track["face_id"] != "unknown":
+                track_id = track["track_id"]
+                bbox = track["bbox"]
+                face_id = track["face_id"]
+                
+                # 往前覆盖face_id
+                for j in range(i - 1, -1, -1):
+                    prev_entry = data[j]
+                    prev_tracks = prev_entry["tracks"]
+                    found_match = False
+                    for prev_track in prev_tracks:
+                        if prev_track["track_id"] == track_id:
+                            if calculate_iou(bbox, prev_track["bbox"]) >= IOU_THRESHOLD:
+                                if prev_track["face_id"] == "unknown":
+                                    prev_track["face_id"] = face_id
+                                else:
+                                    found_match = True
+                            break
+                    if found_match:
+                        break
+                
+                # 往后覆盖face_id
+                for j in range(i + 1, len(data)):
+                    next_entry = data[j]
+                    next_tracks = next_entry["tracks"]
+                    found_match = False
+                    for next_track in next_tracks:
+                        if next_track["track_id"] == track_id:
+                            if calculate_iou(bbox, next_track["bbox"]) >= IOU_THRESHOLD:
+                                if next_track["face_id"] == "unknown":
+                                    next_track["face_id"] = face_id
+                                else:
+                                    found_match = True
+                            break
+                    if found_match:
+                        break
+
+    return data
+
 input_dir = Path("data/raw")
-data_name = Path("video_0042_0_10_20250307080100_20250307081139.json")
-processed = process_data(input_dir / data_name)
+data_name = Path("test_video_2.mp4.json")
+processed_data = process_data(input_dir / data_name)
 
 # 保存结果
 output_dir = Path("data/processed")
-output_path = output_dir / f"{data_name}.json"
+output_dir.mkdir(parents=True, exist_ok=True)  # 确保输出目录存在
+output_path = output_dir / f"{data_name}"
 
-with open(output_path, "w") as f:
-    json.dump(processed, f, indent=2, ensure_ascii=False)
+print(f"Processed data saved to {output_path}")
+
+with open(output_path, "w", encoding='utf-8') as f:
+    json.dump(processed_data, f, indent=2, ensure_ascii=False)
