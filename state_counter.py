@@ -49,7 +49,7 @@ def process_video_data(data):
                 
                 if awake_ratio >= 0.2:
                     state_time[face_id]["awake"] += time_diff
-                elif sleeping_ratio >= 0.6:
+                elif sleeping_ratio >= 0.7:
                     state_time[face_id]["sleeping"] += time_diff
 
     # Convert the face_times dictionary to the desired output format
@@ -58,7 +58,7 @@ def process_video_data(data):
             "id": face_id, 
             "state_time": state_time[face_id]
         }
-        for face_id in state_time.items()
+        for face_id, _ in state_time.items()
     ]
 
     return output
