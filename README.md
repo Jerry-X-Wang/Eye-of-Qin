@@ -18,7 +18,7 @@ In Suzhou High School - SIP, Qin Jiang was the class teacher of the 2024 gifted 
 
 # About us
 
-Members: XinHao Wang, JiaHeng Li, Zhan Jin, Guanhao Chen, Muzhi Yang, Zihan Zhao
+Members: XinHao Wang, JiaHeng Li, Zhan Jin, Guanhao Chen, Muzhi Yan, Zihan Zhao
 
 School: Suzhou High School - SIP
 
