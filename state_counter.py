@@ -1,18 +1,35 @@
 import json
 from pathlib import Path
+from datetime import datetime, timedelta
 
-def process_video_data(data):
+
+def str_to_time(str):
+    return datetime.strptime(str, "%Y%m%d%H%M%S")
+
+
+def process_video_data(input_path):
+    global too_short
+
+    with open(input_path, 'r') as file:
+        data = json.load(file)
+
     # Initialize a dictionary to store time information for each face_id
     state_time = {}
 
-    # Start processing from the first timestamp >= count_time
-    start_index = next(i for i, entry in enumerate(data) if entry["timestamp"] >= count_time)
-    
+    start_time = datetime.strptime(data[0]["time"], "%Y%m%d%H%M%S")
+ 
+    # Start processing from the first time >= count_time
+    try:
+        start_index = next(i for i, entry in enumerate(data) if str_to_time(entry["time"]) - start_time >= timedelta(seconds=count_time))
+    except StopIteration:
+        print(f"Data is too short to count state for {count_time} seconds")
+        return
+
     for i in range(start_index, len(data)):
         current_entry = data[i]
-        current_timestamp = current_entry["timestamp"]
-        previous_timestamp = data[i-1]["timestamp"]
-        time_diff = current_timestamp - previous_timestamp
+        current_time = str_to_time(current_entry["time"])
+        previous_time = str_to_time(data[i-1]["time"])
+        time_delta = current_time - previous_time
         
         for track in current_entry["tracks"]:
             face_id = track["face_id"]
@@ -27,7 +44,7 @@ def process_video_data(data):
                 
                 for j in range(i, -1, -1):
                     entry = data[j]
-                    if current_timestamp - entry["timestamp"] > count_time:
+                    if current_time - str_to_time(entry["time"]) > timedelta(seconds=count_time):
                         break
                     
                     for t in entry["tracks"]:
@@ -48,9 +65,9 @@ def process_video_data(data):
                 sleeping_ratio = count_sleeping / total_count
                 
                 if awake_ratio >= 0.2:
-                    state_time[face_id]["awake"] += time_diff
+                    state_time[face_id]["awake"] += time_delta.total_seconds()
                 elif sleeping_ratio >= 0.7:
-                    state_time[face_id]["sleeping"] += time_diff
+                    state_time[face_id]["sleeping"] += time_delta.total_seconds()
 
     # Convert the face_times dictionary to the desired output format
     output = [
@@ -63,23 +80,24 @@ def process_video_data(data):
 
     return output
 
+
 count_time = 60  # seconds. The time interval to count the state.
 
 # Load the JSON data from the file
 input_dir = Path("data/processed")
-data_name = Path("test_video_2.mp4.json")
+data_name = Path("20250306185000_20250306185500.json")
 input_path = input_dir / data_name
 
-with open(input_path, 'r') as file:
-    data = json.load(file)
+result = process_video_data(input_path)
 
-result = process_video_data(data)
+if result is not None:
+    output_dir = Path("data/time")
+    output_dir.mkdir(parents=True, exist_ok=True)
+    output_path = output_dir / data_name
 
-output_dir = Path("data/time")
-output_dir.mkdir(parents=True, exist_ok=True)
-output_path = output_dir / data_name
+    with open(output_path, 'w') as file:
+        json.dump(result, file, indent=4)
 
-with open(output_path, 'w') as file:
-    json.dump(result, file, indent=4)
-
-print(f"Time data saved to {output_path}")
+    print(f"Time data saved to {output_path}")
+else:
+    print("Failed to save data")

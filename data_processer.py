@@ -36,13 +36,10 @@ def process_data(input_path):
 
     # 遍历每个时间刻的每个track
     for i, entry in enumerate(data):
-        timestamp = entry["timestamp"]
-        frame = entry["frame"]
         tracks = entry["tracks"]
         
         for track in tracks:
             if track["face_id"] != "unknown":
-                track_id = track["track_id"]
                 bbox = track["bbox"]
                 face_id = track["face_id"]
                 
@@ -91,13 +88,13 @@ def process_data(input_path):
     return data
 
 input_dir = Path("data/raw")
-data_name = Path("test_video_2.mp4.json")
-input_path = input_dir / data_name
+data_name = Path("20250306185000_20250306185500.json")
+input_path = input_dir/data_name
 processed_data = process_data(input_path)
 
 output_dir = Path("data/processed")
 output_dir.mkdir(parents=True, exist_ok=True)
-output_path = output_dir / data_name
+output_path = output_dir/data_name
 
 print(f"Processed data saved to {output_path}")
 
