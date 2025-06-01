@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+from tqdm import tqdm
 
 def calculate_iou(bbox1, bbox2):
     x1, y1, x2, y2 = bbox1
@@ -34,8 +35,8 @@ def process_data(input_path):
     # 定义一个IoU阈值来判断位置是否相近
     IOU_THRESHOLD = 0.5
 
-    # 遍历每个时间刻的每个track
-    for i, entry in enumerate(data):
+    # 遍历每个时间刻的每个track，添加进度条
+    for i, entry in tqdm(enumerate(data), total=len(data), desc="Processing tracks"):
         tracks = entry["tracks"]
         
         for track in tracks:
@@ -87,16 +88,18 @@ def process_data(input_path):
 
     return data
 
-input_dir = Path("data/raw")
-data_name = Path("20250306185000_20250306185500.json")
-input_path = input_dir/data_name
-processed_data = process_data(input_path)
 
-output_dir = Path("data/processed")
-output_dir.mkdir(parents=True, exist_ok=True)
-output_path = output_dir/data_name
+if __name__ == "__main__":
+    input_dir = Path("data/raw")
+    data_name = Path("20250306185000_20250306185500.json")
+    input_path = input_dir/data_name
+    processed_data = process_data(input_path)
 
-print(f"Processed data saved to {output_path}")
+    output_dir = Path("data/processed")
+    output_dir.mkdir(parents=True, exist_ok=True)
+    output_path = output_dir/data_name
 
-with open(output_path, "w", encoding='utf-8') as f:
-    json.dump(processed_data, f, indent=2, ensure_ascii=False)
+    print(f"Processed data saved to {output_path}")
+
+    with open(output_path, "w", encoding='utf-8') as f:
+        json.dump(processed_data, f, indent=2, ensure_ascii=False)
