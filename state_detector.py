@@ -7,6 +7,7 @@ from pathlib import Path
 # running flag
 running = True
 
+
 def parse_video_time(video_name):
     """解析视频文件名中的时间信息"""
     parts = video_name.stem.split("_")
@@ -16,6 +17,7 @@ def parse_video_time(video_name):
     start_time = datetime.strptime(start_str, "%Y%m%d%H%M%S")
     end_time = datetime.strptime(end_str, "%Y%m%d%H%M%S")
     return start_time, end_time
+
 
 def process_videos(start_time: datetime, end_time: datetime, monitor_on=True):
     """处理指定时间范围内的多个视频"""
@@ -116,6 +118,7 @@ def process_videos(start_time: datetime, end_time: datetime, monitor_on=True):
     save_data(state_data, data_name)
     cv2.destroyAllWindows()
 
+
 def init_face_system():
     """初始化人脸识别系统"""
     face_detector = cv2.FaceDetectorYN.create(
@@ -149,6 +152,7 @@ def init_face_system():
                 print(f"Face registered: {name}")
     
     return face_detector, face_recognizer, known_faces
+
 
 def process_frame(**kwargs):
     """处理单个帧的核心逻辑"""
@@ -222,6 +226,7 @@ def process_frame(**kwargs):
     process_end_time = datetime.now()
     print(f"Time elasped: {(process_end_time - process_start_time).total_seconds():.3f} s")
 
+
 def detect_state(frame, track, face_detector):
     """检测目标状态"""
     ltrb = track.to_ltrb()
@@ -242,6 +247,7 @@ def detect_state(frame, track, face_detector):
         state = "untracked"
     
     return state
+
 
 def recognize_face(frame, track, detector, recognizer, known_faces):
     """人脸识别"""
@@ -276,6 +282,7 @@ def recognize_face(frame, track, detector, recognizer, known_faces):
                     pass
     return face_id
 
+
 def draw_annotation(frame, track_id, face_id, state, x1, y1):
     """绘制标注信息"""
     colour_map = {
@@ -289,6 +296,7 @@ def draw_annotation(frame, track_id, face_id, state, x1, y1):
         frame, f"ID {track_id} {face_id}",
         (x1, y1), cv2.FONT_HERSHEY_SIMPLEX, 1.2, colour, 5
     )
+
 
 def display_frame(frame, window_width):
     global running
@@ -306,6 +314,7 @@ def display_frame(frame, window_width):
     if cv2.waitKey(1) & 0xFF == 27:  # press ESC to exit
         running = False
 
+
 def save_data(data, filename):
     """保存结果数据"""
     output_dir = Path("data/raw")
@@ -314,6 +323,7 @@ def save_data(data, filename):
     with open(output_dir/filename, "w") as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
     print(f"Data saved to {output_dir/filename}")
+
 
 # 使用示例
 if __name__ == "__main__":
