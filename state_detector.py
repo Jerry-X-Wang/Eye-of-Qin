@@ -9,7 +9,7 @@ running = True
 
 
 def parse_video_time(video_name):
-    """解析视频文件名中的时间信息"""
+    """Parse the time information in the video file name"""
     parts = video_name.stem.split("_")
     start_str = parts[-2]
     end_str = parts[-1]
@@ -20,64 +20,64 @@ def parse_video_time(video_name):
 
 
 def process_videos(start_time: datetime, end_time: datetime, monitor_on=True):
-    """处理指定时间范围内的多个视频"""
-    # 帧间隔设置
+    """Process multiple videos within the specified time range"""
+    # Frame interval setting
     time_interval = 1  # second
 
-    # 初始化模型和追踪器
+    # Initialize models and tracker
     model = YOLO("yolov8n.pt")
     max_age_second = 10
     max_age = int(max_age_second / time_interval)
-    tracker = DeepSort(max_age=max_age, n_init=2)  # 全局追踪器
+    tracker = DeepSort(max_age=max_age, n_init=2)  # Global tracker
     state_data = []
     
-    # 构建人脸数据库
+    # Build face database
     face_detector, face_recognizer, known_faces = init_face_system()
 
-    # 获取符合条件的视频文件
+    # Get video files in the range
     video_dir = Path("videos")
     video_files = []
     for video_path in video_dir.glob("video_*.mp4"):
         try:
             video_start, video_end = parse_video_time(video_path)
-            # 判断时间范围是否有交集
+            # Determine if there is an overlap in the time range
             if (video_end > start_time) and (video_start < end_time):
                 video_files.append((video_start, video_end, video_path))
         except:
             continue
 
-    # 按时间顺序排序视频
+    # Sort video files by start time
     video_files.sort(key=lambda x: x[0])
 
-    # 初始化窗口尺寸
+    # Initialize window size
     window_width = None
 
-    # 遍历处理每个视频
+    # Traverse and process each video
     for video_start, video_end, video_path in video_files:
         if not running:
             break
 
-        # 计算实际需要处理的时间段
+        # Calculate the actual time range to process
         clip_start = max(video_start, start_time)
         clip_end = min(video_end, end_time)
 
         print(f"Processing {video_path.name} [{clip_start} - {clip_end}]\n")
         
-        # 获取视频数据
+        # Get video data
         cap = cv2.VideoCapture(video_path)
         fps = cap.get(cv2.CAP_PROP_FPS)
         total_frame_count = round(cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
         frame_interval = round(fps * time_interval)
         
-        # 计算起始偏移帧数
+        # Calculate start offset frame number
         start_offset = max(0, round((clip_start - video_start).total_seconds() * fps))
         end_offset = min(total_frame_count, round((clip_end - video_start).total_seconds() * fps))
         
-        # 设置帧读取位置
+        # Set frame read position
         cap.set(cv2.CAP_PROP_POS_FRAMES, start_offset)
         
-        # 视频处理主循环
+        # Main loop for video processing
         frame_number = start_offset
         while running and cap.isOpened() and frame_number <= end_offset:
             ret, frame = cap.read()
@@ -85,7 +85,7 @@ def process_videos(start_time: datetime, end_time: datetime, monitor_on=True):
                 break
 
             if frame_number % frame_interval == 0:
-                # 计算绝对时间戳
+                # Calculate absolute timestamp
                 current_time = video_start + timedelta(seconds=frame_number/fps)
                 print(f"Current: {current_time}")
                 if current_time > clip_end:
@@ -113,14 +113,14 @@ def process_videos(start_time: datetime, end_time: datetime, monitor_on=True):
         cap.release()
 
     print("100%\nDone!")
-    # 保存最终数据
+    # Save final data
     data_name = f"{start_time.strftime('%Y%m%d%H%M%S')}_{end_time.strftime('%Y%m%d%H%M%S')}.json"
     save_data(state_data, data_name)
     cv2.destroyAllWindows()
 
 
 def init_face_system():
-    """初始化人脸识别系统"""
+    """Initialize the face recognition system"""
     face_detector = cv2.FaceDetectorYN.create(
         "face_detection_yunet_2023mar.onnx", "", (320, 320),
         score_threshold=0.6, nms_threshold=0.3, top_k=5000
@@ -155,31 +155,31 @@ def init_face_system():
 
 
 def process_frame(**kwargs):
-    """处理单个帧的核心逻辑"""
+    """Core logic for processing a single frame"""
     process_start_time = datetime.now()
 
-    # 解包参数
+    # Unpack parameters
     frame = kwargs["frame"]
     current_time = kwargs["current_time"]
     tracker = kwargs["tracker"]
     
-    # YOLO检测
+    # YOLO detection
     results = kwargs["model"].predict(frame, conf=0.15, iou=0.2, classes=[0], imgsz=1024, verbose=False)
     
-    # 处理检测结果
+    # Process detection results
     bboxes = results[0].boxes.xyxy.cpu().numpy()
     confidences = results[0].boxes.conf.cpu().numpy()
     class_ids = results[0].boxes.cls.cpu().numpy().astype(int)
     
-    # 构建检测结果
+    # Build detection results
     detections = []
     for i in range(len(bboxes)):
         x1, y1, x2, y2 = bboxes[i]
         conf = confidences[i]
-        if class_ids[i] == 0:  # 仅处理人物类别
+        if class_ids[i] == 0:  # Only process the person class
             detections.append(([x1, y1, x2-x1, y2-y1], conf, "person"))
     
-    # 更新追踪器
+    # Update tracker
     tracks = tracker.update_tracks(detections, frame=frame)
     annotated_frame = results[0].plot(line_width=2)
 
@@ -188,47 +188,47 @@ def process_frame(**kwargs):
         "tracks": []
     }
 
-    # 处理每个追踪目标
+    # Process each tracking target
     for track in tracks:
         if not track.is_confirmed():
             continue
         
-        # 获取追踪信息
+        # Get tracking information
         track_id = track.track_id
         ltrb = track.to_ltrb()
         x1, y1, x2, y2 = map(int, ltrb)
         
-        # 状态检测和人脸识别逻辑
+        # State detection and face recognition logic
         state = detect_state(frame, track, kwargs["face_detector"])
         face_id = recognize_face(frame, track, kwargs["face_detector"], 
                                 kwargs["face_recognizer"], kwargs["known_faces"])
         
-        # save track data
+        # Save track data
         track_data = {
             "track_id": track_id,
             "bbox": [x1, y1, x2, y2],
-            "face_id": face_id.split("_")[0],  # remove suffix "_glasses"
+            "face_id": face_id.split("_")[0],  # Remove suffix "_glasses"
             "state": state,
         }
         frame_entry["tracks"].append(track_data)
         
-        # 可视化显示
+        # Visualization display
         if kwargs["monitor_on"]:
             draw_annotation(annotated_frame, track_id, face_id, state, x1, y1)
 
-    # save frame data
+    # Save frame data
     kwargs["state_data"].append(frame_entry)
 
-    # 显示监控画面
+    # Display monitoring screen
     if kwargs["monitor_on"]:
         display_frame(annotated_frame, kwargs["window_width"])
 
     process_end_time = datetime.now()
-    print(f"Time elasped: {(process_end_time - process_start_time).total_seconds():.3f} s")
+    print(f"Time elapsed: {(process_end_time - process_start_time).total_seconds():.3f} s")
 
 
 def detect_state(frame, track, face_detector):
-    """检测目标状态"""
+    """Detect the state of the target"""
     ltrb = track.to_ltrb()
     x1, y1, x2, y2 = map(int, ltrb)
     
@@ -250,7 +250,7 @@ def detect_state(frame, track, face_detector):
 
 
 def recognize_face(frame, track, detector, recognizer, known_faces):
-    """人脸识别"""
+    """Face recognition"""
     ltrb = track.to_ltrb()
     x1, y1, x2, y2 = map(int, ltrb)
     
@@ -284,7 +284,7 @@ def recognize_face(frame, track, detector, recognizer, known_faces):
 
 
 def draw_annotation(frame, track_id, face_id, state, x1, y1):
-    """绘制标注信息"""
+    """Draw annotation information"""
     colour_map = {
         "awake": (0, 255, 0),
         "sleeping": (0, 255, 255),
@@ -300,7 +300,7 @@ def draw_annotation(frame, track_id, face_id, state, x1, y1):
 
 def display_frame(frame, window_width):
     global running
-    """显示监控画面"""
+    """Display the monitoring screen"""
     if window_width is None:
         if frame.shape[1] >= frame.shape[0]:
             window_width = int(0.9 * ctypes.windll.user32.GetSystemMetrics(0))
@@ -311,12 +311,12 @@ def display_frame(frame, window_width):
     scale = window_width / frame.shape[1]
     resized_frame = cv2.resize(frame, (int(frame.shape[1]*scale), int(frame.shape[0]*scale)))
     cv2.imshow("Monitor", resized_frame)
-    if cv2.waitKey(1) & 0xFF == 27:  # press ESC to exit
+    if cv2.waitKey(1) & 0xFF == 27:  # Press ESC to exit
         running = False
 
 
 def save_data(data, filename):
-    """保存结果数据"""
+    """Save the result data"""
     output_dir = Path("data/raw")
     output_dir.mkdir(parents=True, exist_ok=True)
     
@@ -325,8 +325,7 @@ def save_data(data, filename):
     print(f"Data saved to {output_dir/filename}")
 
 
-# 使用示例
 if __name__ == "__main__":
-    start_time = datetime(2025, 3, 6, 18, 45, 11)
-    end_time = datetime(2025, 3, 6, 18, 56)
+    start_time = datetime(2025, 3, 6, 18, 50)
+    end_time = datetime(2025, 3, 6, 18, 55)
     process_videos(start_time, end_time)
