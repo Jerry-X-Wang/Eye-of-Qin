@@ -6,36 +6,36 @@ def calculate_iou(bbox1, bbox2):
     x1, y1, x2, y2 = bbox1
     x3, y3, x4, y4 = bbox2
     
-    # 计算交集的边界
+    # Calculate the boundaries of the intersection
     inter_x1 = max(x1, x3)
     inter_y1 = max(y1, y3)
     inter_x2 = min(x2, x4)
     inter_y2 = min(y2, y4)
     
-    # 计算交集面积
+    # Calculate the area of the intersection
     inter_area = max(0, inter_x2 - inter_x1) * max(0, inter_y2 - inter_y1)
     
-    # 计算bbox1和bbox2的面积
+    # Calculate the area of bbox1 and bbox2
     area1 = (x2 - x1) * (y2 - y1)
     area2 = (x4 - x3) * (y4 - y3)
     
-    # 计算并集面积
+    # Calculate the area of the union
     union_area = area1 + area2 - inter_area
     
-    # 计算IoU
+    # Calculate IoU
     if union_area == 0:
         return 0
     return inter_area / union_area
 
 def process_data(input_path):
-    # 读取原始数据
+    # Read the original data
     with open(input_path, 'r') as f:
         data = json.load(f)
 
-    # 定义一个IoU阈值来判断位置是否相近
+    # Define an IoU threshold to determine if positions are similar
     IOU_THRESHOLD = 0.5
 
-    # 遍历每个时间刻的每个track，添加进度条
+    # Traverse each track in each timestamp, add progress bar
     for i, entry in tqdm(enumerate(data), total=len(data), desc="Processing tracks"):
         tracks = entry["tracks"]
         
@@ -44,7 +44,7 @@ def process_data(input_path):
                 bbox = track["bbox"]
                 face_id = track["face_id"]
                 
-                # 往前覆盖face_id
+                # Cover face_id forwards
                 for j in range(i - 1, -1, -1):
                     prev_entry = data[j]
                     prev_tracks = prev_entry["tracks"]
@@ -63,9 +63,9 @@ def process_data(input_path):
                         break
                     if max_iou_track and max_iou_track["face_id"] == "unknown":
                         max_iou_track["face_id"] = face_id
-                        # 此处不需跳出循环，因为循环的索引是向后的而这里的替换是向前的
+                        # No need to break the loop here, as the index is moving backwards and the replacement is forward
                 
-                # 往后覆盖face_id
+                # Cover face_id backwards
                 for j in range(i + 1, len(data)):
                     next_entry = data[j]
                     next_tracks = next_entry["tracks"]
@@ -84,7 +84,7 @@ def process_data(input_path):
                         break
                     if max_iou_track and max_iou_track["face_id"] == "unknown":
                         max_iou_track["face_id"] = face_id
-                        break  # 跳出循环，避免重复覆盖
+                        break  # Break the loop to avoid repeated coverings
 
     return data
 
