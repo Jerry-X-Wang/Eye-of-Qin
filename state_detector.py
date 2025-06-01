@@ -113,10 +113,10 @@ def process_videos(start_time: datetime, end_time: datetime, monitor_on=True):
         cap.release()
 
     print("100%\nDone!")
-    # Save final data
-    data_name = f"{start_time.strftime('%Y%m%d%H%M%S')}_{end_time.strftime('%Y%m%d%H%M%S')}.json"
-    save_data(state_data, data_name)
+    
     cv2.destroyAllWindows()
+
+    return state_data
 
 
 def init_face_system():
@@ -155,7 +155,7 @@ def init_face_system():
 
 
 def process_frame(**kwargs):
-    """Core logic for processing a single frame"""
+    """Process a single frame"""
     process_start_time = datetime.now()
 
     # Unpack parameters
@@ -315,17 +315,17 @@ def display_frame(frame, window_width):
         running = False
 
 
-def save_data(data, filename):
-    """Save the result data"""
-    output_dir = Path("data/raw")
-    output_dir.mkdir(parents=True, exist_ok=True)
-    
-    with open(output_dir/filename, "w") as f:
-        json.dump(data, f, indent=2, ensure_ascii=False)
-    print(f"Data saved to {output_dir/filename}")
-
-
 if __name__ == "__main__":
     start_time = datetime(2025, 3, 6, 18, 50)
     end_time = datetime(2025, 3, 6, 18, 55)
-    process_videos(start_time, end_time)
+    data = process_videos(start_time, end_time)
+
+    # Save final data
+    data_name = f"{start_time.strftime('%Y%m%d%H%M%S')}_{end_time.strftime('%Y%m%d%H%M%S')}.json"
+    output_dir = Path("data/raw")
+    output_dir.mkdir(parents=True, exist_ok=True)
+    
+    with open(output_dir/data_name, "w") as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
+    print(f"Data saved to {output_dir/data_name}")
+
