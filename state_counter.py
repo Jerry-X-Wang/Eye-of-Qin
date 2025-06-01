@@ -3,12 +3,13 @@ from pathlib import Path
 from datetime import datetime, timedelta
 from tqdm import tqdm  # Import the tqdm library
 
+
 # Function to convert string to datetime object
 def str_to_time(time_str):
     return datetime.strptime(time_str, "%Y%m%d%H%M%S")
 
 # Function to process video data
-def process_video_data(input_path):
+def process_video_data(input_path, count_time=60): # count_time is the time interval to count state
     with open(input_path, 'r') as file:
         data = json.load(file)
 
@@ -25,7 +26,7 @@ def process_video_data(input_path):
         return
 
     # Process data from start_index to the end of the data
-    for i in tqdm(range(start_index, len(data)), desc="Processing data"):  # Use tqdm to display a progress bar
+    for i in tqdm(range(start_index, len(data)), desc="Counting state"):  # Use tqdm to display a progress bar
         current_entry = data[i]
         current_time = str_to_time(current_entry["time"])
         previous_time = str_to_time(data[i - 1]["time"])
@@ -83,25 +84,24 @@ def process_video_data(input_path):
 
     return output
 
-# Time interval to count the state
-count_time = 60  # seconds
 
-# Load the JSON data from the file
-input_dir = Path("data/processed")
-data_name = Path("20250306185000_20250306185500.json")
-input_path = input_dir / data_name
+if __name__ == "__main__":
+    # Load the JSON data from the file
+    input_dir = Path("data/processed")
+    data_name = Path("20250306185000_20250306185500.json")
+    input_path = input_dir / data_name
 
-# Process the data and save the result
-result = process_video_data(input_path)
+    # Process the data and save the result
+    result = process_video_data(input_path)
 
-if result is not None:
-    output_dir = Path("data/time")
-    output_dir.mkdir(parents=True, exist_ok=True)
-    output_path = output_dir / data_name
+    if result is not None:
+        output_dir = Path("data/time")
+        output_dir.mkdir(parents=True, exist_ok=True)
+        output_path = output_dir / data_name
 
-    with open(output_path, 'w') as file:
-        json.dump(result, file, indent=4)
+        with open(output_path, 'w') as file:
+            json.dump(result, file, indent=4)
 
-    print(f"Time data saved to {output_path}")
-else:
-    print("Failed to save data")
+        print(f"Time data saved to {output_path}")
+    else:
+        print("Failed to save data")
