@@ -9,7 +9,7 @@ def str_to_time(time_str):
     return datetime.strptime(time_str, "%Y%m%d%H%M%S")
 
 # Function to process video data
-def process_video_data(input_path, count_time=60): # count_time is the time interval to count state
+def count_state(input_path, count_time=60): # count_time is the time interval to count state
     with open(input_path, 'r') as file:
         data = json.load(file)
 
@@ -92,7 +92,7 @@ if __name__ == "__main__":
     input_path = input_dir / data_name
 
     # Process the data and save the result
-    result = process_video_data(input_path)
+    result = count_state(input_path)
 
     if result is not None:
         output_dir = Path("data/time")

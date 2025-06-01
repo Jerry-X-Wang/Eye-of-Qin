@@ -105,7 +105,7 @@ def process_videos(start_time: datetime, end_time: datetime, monitor_on=True):
                     window_width=window_width
                 )
 
-                print(f"{(current_time - start_time) / (end_time - start_time) * 100:.2f}%")
+                print(f"{(current_time - start_time) / (end_time - start_time) * 100:.3f}%")
                 print()
             
             frame_number += 1
