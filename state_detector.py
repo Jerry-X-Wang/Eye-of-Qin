@@ -25,7 +25,7 @@ def get_video_metadata(video_path):
     cap.release()
     return total_frames, fps
 
-def process_single_video(video_info, global_start, global_end, monitor_on, update_queue):
+def process_single_video(video_info, global_start, global_end, update_queue):
     """处理单个视频的独立函数"""
     video_start, video_end, video_path = video_info
 
@@ -88,7 +88,6 @@ def process_single_video(video_info, global_start, global_end, monitor_on, updat
                     face_recognizer=face_recognizer,
                     known_faces=known_faces,
                     video_data=video_data,
-                    monitor_on=monitor_on,
                 )
     
             frame_number += 1
@@ -105,7 +104,7 @@ def process_single_video(video_info, global_start, global_end, monitor_on, updat
             
     return video_data
 
-def process_videos(start_time: datetime, end_time: datetime, monitor_on=True):
+def process_videos(start_time: datetime, end_time: datetime):
     """Process multiple videos within the specified time range"""
 
     # Get video files in the range
@@ -159,23 +158,10 @@ def process_videos(start_time: datetime, end_time: datetime, monitor_on=True):
     manager = multiprocessing.Manager()
     update_queue = manager.Queue()
 
-    # 启动进度监听线程
-    def progress_monitor():
-        while True:
-            msg = update_queue.get()
-            if msg is None:  # 终止信号
-                return
-            video_path, delta = msg
-            if video_path in progress_bars:
-                progress_bars[video_path].update(delta)
-
-    monitor_thread = threading.Thread(target=progress_monitor)
-    monitor_thread.start()
-
     # 修改多进程任务参数
     ctx = multiprocessing.get_context('spawn')
     with ctx.Pool(max_workers) as pool:
-        tasks = [( (*meta[:3],), start_time, end_time, monitor_on, update_queue) 
+        tasks = [( (*meta[:3],), start_time, end_time, update_queue) 
                 for meta in video_metas]
         
         try:
@@ -184,7 +170,6 @@ def process_videos(start_time: datetime, end_time: datetime, monitor_on=True):
                 results.extend(res)
         finally:
             update_queue.put(None)
-            monitor_thread.join()
             # 关闭所有进度条
             [pbar.close() for pbar in progress_bars.values()]
     
@@ -257,7 +242,6 @@ def process_frame(**kwargs):
     
     # Update tracker
     tracks = tracker.update_tracks(detections, frame=frame)
-    annotated_frame = results[0].plot(line_width=2)
 
     frame_entry = {
         "time": current_time.strftime("%Y%m%d%H%M%S"),
@@ -287,10 +271,6 @@ def process_frame(**kwargs):
             "state": state,
         }
         frame_entry["tracks"].append(track_data)
-        
-        # Visualization display
-        if kwargs["monitor_on"]:
-            draw_annotation(annotated_frame, track_id, face_id, state, x1, y1)
 
     # Save frame data
     kwargs["video_data"].append(frame_entry)
@@ -352,26 +332,12 @@ def recognize_face(frame, track, detector, recognizer, known_faces):
     return face_id
 
 
-def draw_annotation(frame, track_id, face_id, state, x1, y1):
-    """Draw annotation information"""
-    colour_map = {
-        "awake": (0, 255, 0),
-        "sleeping": (0, 255, 255),
-        "untracked": (200, 200, 200)
-    }
-    colour = colour_map.get(state, (200, 200, 200))
-    
-    cv2.putText(
-        frame, f"ID {track_id} {face_id}",
-        (x1, y1), cv2.FONT_HERSHEY_SIMPLEX, 1.2, colour, 5
-    )
-
 running = True
 
 if __name__ == "__main__":
     start_time = datetime(2025, 3, 7, 7, 0)
     end_time = datetime(2025, 3, 7, 22, 0)
-    data = process_videos(start_time, end_time, monitor_on=False)
+    data = process_videos(start_time, end_time)
 
     # Save final data
     data_name = f"{start_time.strftime('%Y%m%d%H%M%S')}_{end_time.strftime('%Y%m%d%H%M%S')}.json"
