@@ -67,7 +67,7 @@ def count_state(input_path, count_time=60): # count_time is the time interval to
 
                 if awake_ratio >= 0.2:
                     state_time[face_id]["awake"] += time_delta.total_seconds()
-                elif sleeping_ratio >= 0.7:
+                elif sleeping_ratio >= 0.8:
                     state_time[face_id]["sleeping"] += time_delta.total_seconds()
 
     # Convert the state_time dictionary to the desired output format
