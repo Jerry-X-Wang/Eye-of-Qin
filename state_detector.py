@@ -53,7 +53,7 @@ def process_single_video(video_info, global_start, global_end, update_queue):
                     round((clip_end - video_start).total_seconds() * fps))
     
     last_report = start_offset
-    report_interval = max(1, (end_offset - start_offset) // 1000)  # 至少1帧
+    report_interval = max(1, (end_offset - start_offset) // 100)  # 至少1帧
 
     # 独立跟踪器实例
     time_interval = 2
@@ -136,10 +136,22 @@ def process_videos(start_time: datetime, end_time: datetime):
             continue
     
     # 根据GPU数量设置workers
-    gpu_count = 16  # 根据实际GPU数量调整
+    gpu_count = 24  # 根据实际GPU数量调整
     max_workers = min(gpu_count, len(video_files))
 
     # 创建全量进度条
+    total_frames_sum = sum(meta[3] for meta in video_metas)  # 总帧数求和
+    max_desc_width = max(len(str(v[2].stem)) for v in video_metas)
+    
+    # 先创建总进度条（position=0）
+    main_pbar = tqdm(
+        total=total_frames_sum,
+        desc="Total Progress",
+        position=0,
+        bar_format="{desc}: {percentage:3.0f}%|{bar:60}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}]",
+        leave=False
+    )
+    
     progress_bars = {}
     max_desc_width = max(len(str(v[2].stem)) for v in video_metas)
     for idx, meta in enumerate(video_metas):
@@ -148,7 +160,7 @@ def process_videos(start_time: datetime, end_time: datetime):
         pbar = tqdm(
             total=total_frames,
             desc=desc,
-            position=idx,
+            position=idx + 1,
             bar_format="{desc}: {percentage:3.0f}%|{bar:40}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}]",
             leave=False
         )
@@ -160,11 +172,20 @@ def process_videos(start_time: datetime, end_time: datetime):
 
     # 启动进度监听线程
     def progress_monitor():
+        total_processed = 0
         while True:
             msg = update_queue.get()
             if msg is None:  # 终止信号
+                main_pbar.update(total_frames_sum - total_processed)  # 确保完成
                 return
+            
             video_path, delta = msg
+            total_processed += delta
+            
+            # 更新总进度条
+            main_pbar.update(delta)
+            
+            # 更新单个视频进度条
             if video_path in progress_bars:
                 progress_bars[video_path].update(delta)
 
@@ -184,9 +205,10 @@ def process_videos(start_time: datetime, end_time: datetime):
         finally:
             update_queue.put(None)
             monitor_thread.join()
-            # 关闭所有进度条
+            # 关闭所有进度条（包含总进度条）
+            main_pbar.close()
             [pbar.close() for pbar in progress_bars.values()]
-    
+
     # 按时间排序
     results.sort(key=lambda x: x["time"])
     return results
@@ -350,7 +372,7 @@ running = True
 
 if __name__ == "__main__":
     start_time = datetime(2025, 3, 7, 7, 0)
-    end_time = datetime(2025, 3, 7, 8, 0)
+    end_time = datetime(2025, 3, 7, 12, 0)
     data = process_videos(start_time, end_time)
 
     # Save final data
