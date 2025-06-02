@@ -4,6 +4,7 @@ from ultralytics import YOLO
 from deep_sort_realtime.deepsort_tracker import DeepSort
 from pathlib import Path
 
+
 # running flag
 running = True
 
@@ -22,10 +23,10 @@ def parse_video_time(video_name):
 def process_videos(start_time: datetime, end_time: datetime, monitor_on=True):
     """Process multiple videos within the specified time range"""
     # Frame interval setting
-    time_interval = 1  # second
+    time_interval = 2  # second
 
     # Initialize models and tracker
-    model = YOLO("yolov8n.pt")
+    model = YOLO("yolov8n.pt").to("cuda")
     max_age_second = 10
     max_age = int(max_age_second / time_interval)
     tracker = DeepSort(max_age=max_age, n_init=2)  # Global tracker
@@ -65,6 +66,7 @@ def process_videos(start_time: datetime, end_time: datetime, monitor_on=True):
         
         # Get video data
         cap = cv2.VideoCapture(video_path)
+        cap.set(cv2.CAP_PROP_HW_ACCELERATION, cv2.VIDEO_ACCELERATION_ANY)
         fps = cap.get(cv2.CAP_PROP_FPS)
         total_frame_count = round(cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
@@ -112,7 +114,10 @@ def process_videos(start_time: datetime, end_time: datetime, monitor_on=True):
 
         cap.release()
 
-    print("100%\nDone!")
+    if running:
+        print("100%\nDone!")
+    else:
+        print("Interrupted")
     
     cv2.destroyAllWindows()
 
@@ -127,7 +132,8 @@ def init_face_system():
     )
     
     face_recognizer = cv2.FaceRecognizerSF.create(
-        "face_recognition_sface_2021dec.onnx", ""
+        "face_recognition_sface_2021dec.onnx", 
+        "", 
     )
 
     known_faces = []
@@ -164,7 +170,15 @@ def process_frame(**kwargs):
     tracker = kwargs["tracker"]
     
     # YOLO detection
-    results = kwargs["model"].predict(frame, conf=0.15, iou=0.2, classes=[0], imgsz=1024, verbose=False)
+    results = kwargs["model"].predict(
+        frame, 
+        conf=0.15, 
+        iou=0.2, 
+        classes=[0], 
+        imgsz=1024, 
+        verbose=False,
+        device='cuda'
+    )
     
     # Process detection results
     bboxes = results[0].boxes.xyxy.cpu().numpy()
@@ -301,13 +315,7 @@ def draw_annotation(frame, track_id, face_id, state, x1, y1):
 def display_frame(frame, window_width):
     global running
     """Display the monitoring screen"""
-    if window_width is None:
-        if frame.shape[1] >= frame.shape[0]:
-            window_width = int(0.9 * ctypes.windll.user32.GetSystemMetrics(0))
-        else:
-            window_height = int(0.9 * ctypes.windll.user32.GetSystemMetrics(1))
-            window_width = int(frame.shape[1] * window_height / frame.shape[0])
-    
+    window_width = 800
     scale = window_width / frame.shape[1]
     resized_frame = cv2.resize(frame, (int(frame.shape[1]*scale), int(frame.shape[0]*scale)))
     cv2.imshow("Monitor", resized_frame)
@@ -316,9 +324,9 @@ def display_frame(frame, window_width):
 
 
 if __name__ == "__main__":
-    start_time = datetime(2025, 3, 6, 18, 50)
-    end_time = datetime(2025, 3, 6, 18, 55)
-    data = process_videos(start_time, end_time)
+    start_time = datetime(2025, 3, 6, 18, 30)
+    end_time = datetime(2025, 3, 6, 19, 0)
+    data = process_videos(start_time, end_time, monitor_on=False)
 
     # Save final data
     data_name = f"{start_time.strftime('%Y%m%d%H%M%S')}_{end_time.strftime('%Y%m%d%H%M%S')}.json"
