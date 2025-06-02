@@ -53,7 +53,7 @@ def process_single_video(video_info, global_start, global_end, update_queue):
                     round((clip_end - video_start).total_seconds() * fps))
     
     last_report = start_offset
-    report_interval = max(1, (end_offset - start_offset) // 100)  # 至少1帧
+    report_interval = max(1, (end_offset - start_offset) // 1000)  # 至少1帧
 
     # 独立跟踪器实例
     time_interval = 2
@@ -158,6 +158,19 @@ def process_videos(start_time: datetime, end_time: datetime):
     manager = multiprocessing.Manager()
     update_queue = manager.Queue()
 
+    # 启动进度监听线程
+    def progress_monitor():
+        while True:
+            msg = update_queue.get()
+            if msg is None:  # 终止信号
+                return
+            video_path, delta = msg
+            if video_path in progress_bars:
+                progress_bars[video_path].update(delta)
+
+    monitor_thread = threading.Thread(target=progress_monitor)
+    monitor_thread.start()
+
     # 修改多进程任务参数
     ctx = multiprocessing.get_context('spawn')
     with ctx.Pool(max_workers) as pool:
@@ -170,6 +183,7 @@ def process_videos(start_time: datetime, end_time: datetime):
                 results.extend(res)
         finally:
             update_queue.put(None)
+            monitor_thread.join()
             # 关闭所有进度条
             [pbar.close() for pbar in progress_bars.values()]
     
@@ -336,7 +350,7 @@ running = True
 
 if __name__ == "__main__":
     start_time = datetime(2025, 3, 7, 7, 0)
-    end_time = datetime(2025, 3, 7, 22, 0)
+    end_time = datetime(2025, 3, 7, 8, 0)
     data = process_videos(start_time, end_time)
 
     # Save final data
