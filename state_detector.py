@@ -53,10 +53,10 @@ def process_single_video(video_info, global_start, global_end, update_queue):
                     round((clip_end - video_start).total_seconds() * fps))
     
     last_report = start_offset
-    report_interval = max(1, (end_offset - start_offset) // 100)  # 至少1帧
+    report_interval = max(1, (end_offset - start_offset) // 1000)  # 至少1帧
 
     # 独立跟踪器实例
-    time_interval = 2
+    time_interval = 3
     max_age = int(10 / time_interval)
     tracker = DeepSort(max_age=max_age, n_init=2)
     frame_interval = round(fps * time_interval)
@@ -73,7 +73,7 @@ def process_single_video(video_info, global_start, global_end, update_queue):
                 break
 
             if frame_number % frame_interval == 0:
-                # Calculate absolute timestamp
+                # Calculate absolute time
                 current_time = video_start + timedelta(seconds=frame_number/fps)
                 if current_time > clip_end:
                     break
@@ -101,12 +101,21 @@ def process_single_video(video_info, global_start, global_end, update_queue):
         if frame_number > last_report:
             update_queue.put( (video_path, frame_number - last_report) )
         cap.release()
+
+        # 删除CUDA张量和模型实例
+        del model
+        del tracker
+        del face_detector
+        del face_recognizer
+        del known_faces
+        
+        # 显式释放CUDA缓存
+        torch.cuda.empty_cache()
             
     return video_data
 
-def process_videos(start_time: datetime, end_time: datetime):
+def process_videos(start_time: datetime, end_time: datetime, position_offset=0):
     """Process multiple videos within the specified time range"""
-
     # Get video files in the range
     video_dir = Path("videos")
     video_files = []
@@ -118,6 +127,11 @@ def process_videos(start_time: datetime, end_time: datetime):
                 video_files.append((video_start, video_end, video_path))
         except:
             continue
+        
+    if not video_files:
+        print(f"⚠️ No videos found between {start_time} and {end_time}")
+        return []
+
 
     # Sort video files by start time
     video_files.sort(key=lambda x: x[0])
@@ -136,32 +150,31 @@ def process_videos(start_time: datetime, end_time: datetime):
             continue
     
     # 根据GPU数量设置workers
-    gpu_count = 24  # 根据实际GPU数量调整
-    max_workers = min(gpu_count, len(video_files))
+    process_count = 16  # 根据实际GPU数量调整
+    max_workers = min(process_count, len(video_files))
 
     # 创建全量进度条
     total_frames_sum = sum(meta[3] for meta in video_metas)  # 总帧数求和
     max_desc_width = max(len(str(v[2].stem)) for v in video_metas)
     
-    # 先创建总进度条（position=0）
+    # 创建总进度条
     main_pbar = tqdm(
         total=total_frames_sum,
         desc="Total Progress",
-        position=0,
-        bar_format="{desc}: {percentage:3.0f}%|{bar:60}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}]",
+        position=position_offset*len(video_files)*2,
+        bar_format="{desc}: {percentage:3.0f}%|{bar:50}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}]",
         leave=False
     )
     
     progress_bars = {}
-    max_desc_width = max(len(str(v[2].stem)) for v in video_metas)
     for idx, meta in enumerate(video_metas):
         video_start, video_end, video_path, total_frames, fps = meta
         desc = f"📽 {video_path.stem[:max_desc_width]}".ljust(max_desc_width+2)
         pbar = tqdm(
             total=total_frames,
             desc=desc,
-            position=idx + 1,
-            bar_format="{desc}: {percentage:3.0f}%|{bar:40}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}]",
+            position=idx + 1 + position_offset*len(video_files)*2,
+            bar_format="{desc}: {percentage:3.0f}%|{bar:30}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}]",
             leave=False
         )
         progress_bars[video_path] = pbar
@@ -372,7 +385,7 @@ running = True
 
 if __name__ == "__main__":
     start_time = datetime(2025, 3, 7, 7, 0)
-    end_time = datetime(2025, 3, 7, 12, 0)
+    end_time = datetime(2025, 3, 7, 7, 10)
     data = process_videos(start_time, end_time)
 
     # Save final data
@@ -382,5 +395,5 @@ if __name__ == "__main__":
     
     with open(output_dir/data_name, "w") as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
-    print(f"Data saved to {output_dir/data_name}")
+    print(f"\nData saved to {output_dir/data_name}")
 
