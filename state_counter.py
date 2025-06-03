@@ -65,9 +65,9 @@ def count_state(input_path, count_time=60): # count_time is the time interval to
                 awake_ratio = count_awake / total_count
                 sleeping_ratio = count_sleeping / total_count
 
-                if awake_ratio >= 0.2:
+                if awake_ratio >= 0.1:
                     state_time[face_id]["awake"] += time_delta.total_seconds()
-                elif sleeping_ratio >= 0.8:
+                elif sleeping_ratio >= 0.9:
                     state_time[face_id]["sleeping"] += time_delta.total_seconds()
 
     # Convert the state_time dictionary to the desired output format
@@ -88,7 +88,7 @@ def count_state(input_path, count_time=60): # count_time is the time interval to
 if __name__ == "__main__":
     # Load the JSON data from the file
     input_dir = Path("data/processed")
-    data_name = Path("20250306185000_20250306185500.json")
+    data_name = Path("20250307070000_20250307220000.json")
     input_path = input_dir / data_name
 
     # Process the data and save the result
